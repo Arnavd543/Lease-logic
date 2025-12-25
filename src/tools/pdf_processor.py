@@ -3,6 +3,15 @@ from typing import List, Dict
 import re
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+try:
+    from pdf2image import convert_from_path
+    import pytesseract
+    from PIL import Image
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    print("⚠️  OCR not available. Install: pip install pytesseract pdf2image Pillow")
+
 class LeaseDocumentProcessor:
     """Processes lease PDF documents into structured chunks"""
     
@@ -24,26 +33,89 @@ class LeaseDocumentProcessor:
             separators=["\n\n", "\n", ". ", " ", ""]  # Try splits in this order
         )
     
-    def extract_text_from_pdf(self, pdf_path: str) -> str:
+    def extract_text_from_pdf(self, pdf_path: str, use_ocr: bool = None) -> str:
         """
-        Extract raw text from PDF.
+        Extract text from PDF with automatic OCR fallback.
         
         Args:
             pdf_path: Path to PDF file
+            use_ocr: Force OCR usage (None = auto-detect)
             
         Returns:
             Extracted text as string
         """
+        # Try normal text extraction first
         reader = PdfReader(pdf_path)
         text = ""
         
         for page_num, page in enumerate(reader.pages):
             page_text = page.extract_text()
-            # Add page markers for debugging
             text += f"\n--- PAGE {page_num + 1} ---\n"
             text += page_text + "\n"
         
+        # Check if we got meaningful text
+        text_density = len(text.strip()) / len(reader.pages)
+        
+        # If very little text extracted (scanned PDF), use OCR
+        if text_density < 50 or use_ocr:  # Less than 50 chars per page
+            print(f"⚠️  Low text density ({text_density:.0f} chars/page) - using OCR...")
+            
+            if not OCR_AVAILABLE:
+                raise ImportError(
+                    "PDF appears to be scanned but OCR not available. "
+                    "Install: pip install pytesseract pdf2image Pillow && brew install tesseract"
+                )
+            
+            text = self._extract_text_with_ocr(pdf_path)
+        
         return text
+    
+    def _extract_text_with_ocr(self, pdf_path: str) -> str:
+        """
+        Extract text using OCR (for scanned PDFs).
+        
+        Args:
+            pdf_path: Path to PDF file
+            
+        Returns:
+            OCR-extracted text
+        """
+        print("🔍 Running OCR on PDF (this may take a minute)...")
+        
+        # Convert PDF to images
+        images = convert_from_path(pdf_path, dpi=300)  # Higher DPI = better OCR
+        
+        text = ""
+        total_pages = len(images)
+        
+        for page_num, image in enumerate(images, 1):
+            print(f"   Processing page {page_num}/{total_pages}...")
+            
+            # Run OCR on image
+            image = self._preprocess_image_for_ocr(image)
+            page_text = pytesseract.image_to_string(image)
+            
+            text += f"\n--- PAGE {page_num} ---\n"
+            text += page_text + "\n"
+        
+        print(f"✓ OCR complete! Extracted {len(text)} characters")
+        return text
+    
+    def _preprocess_image_for_ocr(self, image):
+        """Improve OCR accuracy with image preprocessing"""
+        from PIL import ImageEnhance, ImageFilter
+        
+        # Convert to grayscale
+        image = image.convert('L')
+        
+        # Increase contrast
+        enhancer = ImageEnhance.Contrast(image)
+        image = enhancer.enhance(2)
+        
+        # Sharpen
+        image = image.filter(ImageFilter.SHARPEN)
+        
+        return image
     
     def detect_sections(self, text: str) -> Dict[str, str]:
         """
@@ -80,6 +152,7 @@ class LeaseDocumentProcessor:
             sections["full_document"] = text
             
         return sections
+
     
     def chunk_document(self, text: str, metadata: Dict = None) -> List[Dict]:
         """

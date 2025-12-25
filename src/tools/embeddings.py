@@ -1,5 +1,5 @@
 from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from typing import List, Dict, Optional
 import chromadb
 from chromadb.config import Settings
@@ -56,10 +56,7 @@ class VectorStoreManager:
             collection_name=collection_name,
             persist_directory=self.persist_directory
         )
-        
-        # Persist to disk
-        vectorstore.persist()
-        
+                
         print(f"✓ Vector store '{collection_name}' created with {len(texts)} embeddings")
         
         return vectorstore
