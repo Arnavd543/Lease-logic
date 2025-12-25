@@ -1,0 +1,31 @@
+models:
+  fast_model: "gpt-4o-mini"      # For agents (cheap, fast)
+  smart_model: "gpt-4o"          # For synthesis (expensive, accurate)
+  embedding_model: "text-embedding-3-small"
+
+# Vector store settings
+vector_store:
+  persist_directory: "./data/vector_stores"
+  collection_name_lease: "lease_documents"
+  collection_name_laws: "state_laws"
+  chunk_size: 1000
+  chunk_overlap: 200
+
+# RAG settings
+rag:
+  retrieval_k: 5                # Number of chunks to retrieve
+  confidence_threshold: 7.0     # Minimum quality score (0-10)
+  max_requery_iterations: 3
+
+# State laws
+state_laws:
+  initial_states: ["california"]
+  corpus_path: "./data/laws"
+
+# Cost tracking (per 1K tokens)
+costs:
+  gpt4o_mini_input: 0.00015
+  gpt4o_mini_output: 0.0006
+  gpt4o_input: 0.0025
+  gpt4o_output: 0.01
+  embedding: 0.00002

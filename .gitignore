@@ -1,0 +1,11 @@
+venv/
+.env
+data/leases/*.pdf
+data/vector_stores/
+__pycache__/
+*.py[cod]
+*.class
+.pytest_cache/
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,16 @@
+# Let pip auto-resolve compatible versions
+langchain
+langgraph
+langchain-openai
+langchain-community
+
+chromadb
+PyPDF2
+tiktoken
+python-dotenv
+pydantic
+pyyaml
+numpy
+streamlit
+langsmith
+scikit-learn
