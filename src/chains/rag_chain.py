@@ -53,11 +53,11 @@ class LeaseRAG:
     def analyze(self, query: str, retrieved_docs: List[Dict]) -> str:
         """
         Analyze retrieved lease documents to answer query.
-        
+
         Args:
             query: User's question
             retrieved_docs: Documents from retrieval
-            
+
         Returns:
             Analysis text
         """
@@ -66,17 +66,17 @@ class LeaseRAG:
             f"[Section: {doc['metadata'].get('section', 'unknown')}]\n{doc['text']}"
             for doc in retrieved_docs
         ])
-        
+
         # Create prompt
         prompt = ChatPromptTemplate.from_template(LEASE_ANALYZER_PROMPT)
-        
+
         # Generate analysis
         chain = prompt | self.llm
         response = chain.invoke({
-            "lease_context": context_str,
-            "query": query
+            "context": context_str,
+            "question": query
         })
-        
+
         return response.content
     
     def run(self, query: str) -> Dict:
@@ -139,20 +139,34 @@ class LawRAG:
     
     def analyze(self, query: str, retrieved_laws: List[Dict]) -> str:
         """Analyze retrieved laws"""
-        # Format context
-        context_str = "\n\n".join([
-            f"[Civil Code §{doc['metadata']['section']}: {doc['metadata']['title']}]\n{doc['text']}"
-            for doc in retrieved_laws
-        ])
-        
+        # Format context - handle different jurisdictions
+        formatted_docs = []
+        for doc in retrieved_laws:
+            metadata = doc['metadata']
+            jurisdiction = metadata.get('jurisdiction', 'state')
+
+            # Format based on jurisdiction
+            if jurisdiction == 'federal':
+                header = f"[Federal Law - {metadata.get('title', 'Untitled')}]"
+            else:
+                # State law - use section and title
+                section = metadata.get('section', 'unknown')
+                title = metadata.get('title', 'Untitled')
+                header = f"[{self.state.title()} Law §{section}: {title}]"
+
+            formatted_docs.append(f"{header}\n{doc['text']}")
+
+        context_str = "\n\n".join(formatted_docs)
+
         prompt = ChatPromptTemplate.from_template(LAW_ANALYZER_PROMPT)
         chain = prompt | self.llm
-        
+
         response = chain.invoke({
-            "law_context": context_str,
-            "query": query
+            "state": self.state.title(),
+            "context": context_str,
+            "question": query
         })
-        
+
         return response.content
     
     def run(self, query: str) -> Dict:

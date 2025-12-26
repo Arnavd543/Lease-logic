@@ -1,178 +1,434 @@
-# ===== LEASE ANALYZER PROMPT =====
-LEASE_ANALYZER_PROMPT = """You are a lease document analysis specialist. Your job is to extract relevant information from lease documents to answer the user's question.
+"""
+Prompt Templates for LeaseLogic Agents
 
-RETRIEVED LEASE SECTIONS:
-{lease_context}
+Centralized location for all prompt templates used by agents.
+Each prompt is carefully crafted for its specific purpose.
+"""
 
-USER QUESTION:
-{query}
+from langchain_core.prompts import ChatPromptTemplate
 
-Your task:
-1. Identify which retrieved sections are most relevant to the question
-2. Extract the specific clause, language, or terms that address the question
-3. Quote exact language from the lease when possible (use "..." for quotes)
-4. Note the section name where information was found
-5. If the lease doesn't address the question, explicitly state "The lease does not contain information about [topic]"
+# ========== LEASE ANALYZER PROMPT ==========
+# Used by: lease_agent_node
+# Purpose: Analyze user's lease document
 
-Provide a focused analysis of what the LEASE SAYS (not what you think or what the law says).
+LEASE_ANALYZER_PROMPT = """
+You are analyzing a residential lease agreement to answer the user's question.
 
-Format your response as:
+**Your task:**
+1. Extract relevant clauses from the lease
+2. Quote exact language when possible
+3. Note section/clause numbers if present
+4. Be specific about terms, amounts, and conditions
 
-**RELEVANT CLAUSE:**
-[Quote or paraphrase the specific lease language]
+**Context from lease:**
+{context}
 
-**SECTION:**
-[Which section this came from]
+**User question:**
+{question}
 
-**INTERPRETATION:**
-[What this means in plain language]
+**Instructions:**
+- Focus ONLY on what the lease actually says
+- Quote specific clauses verbatim when relevant
+- If the lease is silent on the topic, say so
+- Don't make assumptions about unstated terms
+- Note any ambiguous or unclear language
 
-If the lease doesn't address the question, simply state: "The lease does not contain specific terms regarding [topic]."
+**Your analysis:**
+"""
 
-LEASE ANALYSIS:"""
 
-# ===== LAW ANALYZER PROMPT =====
-LAW_ANALYZER_PROMPT = """You are a California tenant law specialist. Your job is to identify and explain relevant tenant protection laws.
+# ========== LAW ANALYZER PROMPT ==========
+# Used by: law_agent_node
+# Purpose: Analyze state tenant protection laws
 
-RETRIEVED LAW SECTIONS:
-{law_context}
+LAW_ANALYZER_PROMPT = """
+You are a legal expert on {state} tenant protection law.
 
-USER QUESTION:
-{query}
+**Your task:**
+1. Identify relevant Civil Code sections or statutes
+2. Explain the legal standard or requirement
+3. Note any exceptions or special conditions
+4. Distinguish between state and federal law if both apply
 
-Your task:
-1. Identify which California Civil Code sections apply to the question
-2. Explain what the law requires, prohibits, or allows
-3. State specific legal standards or limits (e.g., "maximum 2 months rent for security deposit")
-4. Note any conditions, exceptions, or qualifications
-5. If no applicable law was found, state "No specific California law addresses [topic]"
+**Legal context:**
+{context}
 
-Provide a clear explanation of what CALIFORNIA LAW SAYS (not what you think the lease should say).
+**User question:**
+{question}
 
-Format your response as:
+**Instructions:**
+- Cite specific code sections (e.g., "California Civil Code §1950.5")
+- Explain what the law requires or prohibits
+- Note if this is state vs. federal law
+- Mention relevant case law interpretations if known
+- Be precise about legal standards (e.g., "reasonable" means 5-6% for late fees)
 
-**APPLICABLE LAW:**
-Civil Code Section [number]: [title]
+**Your legal analysis:**
+"""
 
-**LEGAL REQUIREMENT:**
-[What the law requires/prohibits/allows]
 
-**SPECIFIC STANDARDS:**
-[Any numerical limits, time periods, or specific conditions]
+# ========== RETRIEVAL GRADER PROMPT ==========
+# Used by: verifier_agent_node
+# Purpose: Grade quality of retrieved documents
 
-**EXCEPTIONS:**
-[Any exceptions or special conditions, if applicable]
+RETRIEVAL_GRADER_PROMPT = """
+You are grading the quality of retrieved documents for answering a user's question.
 
-LAW ANALYSIS:"""
+**User question:** {query}
 
-# ===== RETRIEVAL GRADER PROMPT =====
-RETRIEVAL_GRADER_PROMPT = """You are a retrieval quality evaluator. Your job is to grade how well the retrieved documents answer the user's question.
+**Retrieved documents:**
+{documents}
 
-This is critical for corrective RAG - if retrieval quality is poor, we'll refine the query and search again.
+**Your task:** Grade retrieval quality on a scale of 0-10
 
-USER QUESTION:
-{query}
+**Grading criteria:**
+- **10**: Perfect - Documents directly and completely answer the question with specific details
+- **8-9**: Good - Documents contain most information needed, minor gaps acceptable
+- **6-7**: Adequate - Documents have relevant info but missing some important details
+- **4-5**: Partial - Documents somewhat related but missing key information
+- **2-3**: Poor - Documents barely relevant to the question
+- **0-1**: Irrelevant - Documents don't address the question at all
 
-RETRIEVED DOCUMENTS (lease + law):
-{retrieved_docs}
+**CRITICAL GRADING GUIDELINES:**
 
-Evaluation criteria:
-1. **Relevance**: Do documents contain information that directly addresses the question?
-2. **Completeness**: Is there enough context to answer the question fully?
-3. **Specificity**: Are the relevant passages clear and specific (not vague)?
+1. **Single-source questions**: If the question asks ONLY about LAW (e.g., "What does California law say..."), grade based ONLY on law documents. Ignore if lease documents are irrelevant. Same for lease-only questions.
 
-Grading scale (0-10):
-- 0-3: Poor retrieval - documents are off-topic or missing critical information
-- 4-6: Partial retrieval - some relevant info but gaps or ambiguity remain
-- 7-10: Good retrieval - documents clearly and completely address the question
+2. **Comparison questions**: If asking to compare lease vs. law, BOTH sources must have good info for high grade.
 
-**IMPORTANT**: Be strict in grading. If documents are only tangentially related or lack specific details needed to answer the question, grade 6 or below.
+3. **Specificity matters**: Generic information gets lower grades. Specific code sections, amounts, and requirements get higher grades.
 
-Output format (JSON only, no other text):
+4. **Federal vs. State**: Recognize when federal law is relevant (e.g., Fair Housing Act, ADA, SCRA) and grade accordingly.
+
+**Examples:**
+
+Example 1:
+Query: "What does California law say about maximum security deposits?"
+Law docs: Contains CA Civil Code §1950.5 with "2 months rent maximum"
+Lease docs: Generic security deposit clause
+Grade: 9/10 - Law docs perfectly answer the question
+
+Example 2:
+Query: "Can my landlord charge $300 late fee?"
+Lease docs: "Late fee of $300 if rent late"
+Law docs: "Late fees must be reasonable, typically under 5% of rent"
+Grade: 9/10 - Both sources provide needed information
+
+Example 3:
+Query: "security deposits"
+Lease docs: "Deposit required"
+Law docs: "Deposits regulated by law"
+Grade: 3/10 - Too vague, no specifics
+
+**Return JSON with:**
 {{
-  "grade": <integer 0-10>,
-  "reasoning": "<2-3 sentence explanation of grade>",
-  "needs_requery": <boolean - true if grade < 7>
+    "grade": <number 0-10>,
+    "reasoning": "<explain your grade in 1-2 sentences>",
+    "needs_requery": <true if grade < 7, false otherwise>
 }}
 
-EVALUATION:"""
+**Your grading (JSON only, no other text):**
+"""
 
-# ===== SYNTHESIS PROMPT =====
-SYNTHESIS_PROMPT = """You are a legal communication specialist helping a tenant understand their lease in the context of California law.
 
-Your job is to synthesize the lease analysis and law analysis into a clear, actionable answer.
+# ========== SYNTHESIS PROMPT ==========
+# Used by: synthesis_agent_node
+# Purpose: Combine lease and law findings into final answer
 
-USER QUESTION:
-{query}
+SYNTHESIS_PROMPT = """
+You are synthesizing legal analysis to answer a tenant's question about their lease.
 
-WHAT THE LEASE SAYS:
+**User question:** {user_query}
+
+**What the lease says:**
 {lease_finding}
 
-WHAT CALIFORNIA LAW SAYS:
+**What {state} law requires:**
 {law_finding}
 
-RETRIEVAL QUALITY GRADE: {quality_grade}/10
+**Your task:** Create a comprehensive, plain-language answer that:
 
-Your task:
-1. Directly answer the user's question in 1-2 sentences
-2. Compare what the lease says vs. what the law requires
-3. Identify any conflicts or concerning clauses
-4. Use plain language (not legalese) - imagine explaining to a friend
-5. Flag high-risk issues with ⚠️ warnings
-6. Provide practical next steps
+1. **DIRECT ANSWER** (1-2 sentences)
+   - Answer the user's question directly
+   - Be clear about bottom line
 
-**CRITICAL RULES:**
-- Do NOT provide legal advice (you're not a lawyer)
-- Do NOT tell the user what to do legally
-- DO explain the situation clearly
-- DO flag potential issues for them to investigate further
-- If retrieval quality is low (<7), acknowledge limitations in your answer
+2. **LEASE TERMS** (2-3 sentences)
+   - What does the lease specifically say about this?
+   - Quote relevant clauses if important
 
-Structure your response:
+3. **LEGAL REQUIREMENTS** (2-3 sentences)
+   - What does state/federal law require?
+   - Cite specific code sections (e.g., "CA Civil Code §1950.5")
 
-**DIRECT ANSWER:**
-[One-sentence direct answer to the question]
+4. **ANALYSIS** (2-4 sentences)
+   - Compare lease terms vs. legal requirements
+   - Identify any conflicts or compliance issues
+   - Explain implications for the tenant
 
-**LEASE TERMS:**
-[What your specific lease says about this]
+5. **[WARNING] FLAGS** (if applicable)
+   - Note any potential legal violations
+   - Highlight unfair or illegal terms
+   - Mention tenant rights being violated
 
-**CALIFORNIA LAW:**
-[What state law requires or protects]
+6. **RECOMMENDATION** (1-2 sentences)
+   - What should the tenant do?
+   - When to seek legal help
 
-**COMPARISON:**
-[How lease terms compare to legal requirements - any conflicts or issues?]
+**Tone guidelines:**
+- Write in plain English, not legalese
+- Be helpful but not alarmist
+- Be specific with numbers, dates, amounts
+- Always caveat: "This is information, not legal advice. Consult a lawyer for legal advice."
 
-**⚠️ POTENTIAL CONCERNS:** (if applicable)
-[Any clauses that may be problematic or unenforceable]
+**Your synthesized answer:**
+"""
 
-**NEXT STEPS:**
-[Practical suggestions - e.g., "Consider discussing with landlord" or "Consult tenant rights organization"]
 
-**CONFIDENCE NOTE:** (if quality grade < 7)
-[Acknowledge that retrieval may have missed relevant information]
+# ========== QUERY REFINEMENT PROMPT ==========
+# Used by: QueryRefiner class
+# Purpose: Improve search queries iteratively
 
-**DISCLAIMER:**
-This analysis is for informational purposes only and does not constitute legal advice. Consult a licensed attorney for legal guidance specific to your situation.
+QUERY_REFINEMENT_PROMPT = """
+You are improving a search query that didn't find good results.
 
-RESPONSE:"""
+Original query: {original_query}
+Current iteration: {iteration}
+Why previous search failed: {failure_reason}
 
-# ===== QUERY REFINEMENT PROMPT =====
-# Used when we need to reformulate query for better retrieval
-QUERY_REFINEMENT_PROMPT = """You received a low-quality retrieval for the following query. Reformulate it to improve results.
+Refine the query based on the iteration number:
 
-ORIGINAL QUERY:
-{original_query}
+**Iteration 1 strategy**: Add specific legal/lease keywords
+- Add terms like "clause", "section", "provision", "Civil Code"
+- Be more specific about what's being asked
 
-ISSUE WITH RETRIEVAL:
-{issue}
+**Iteration 2 strategy**: Simplify to core concept
+- Remove unnecessary words
+- Focus on the main topic (e.g., "late fee", "security deposit")
+- Use synonyms
 
-ITERATION: {iteration}
+**Iteration 3+ strategy**: Completely rephrase
+- Ask the question differently
+- Use alternative terminology
+- Focus on the outcome/impact
 
-Generate an improved search query that:
-1. Uses more specific legal terminology if available
-2. Breaks down complex questions into key concepts
-3. Focuses on the core legal issue
+Examples:
+Original: "What does state law say about maximum security deposits?"
+Iteration 1: "security deposit maximum limit residential lease statute"
+Iteration 2: "security deposit maximum"
+Iteration 3: "how much can landlord charge deposit"
 
-Output only the refined query text (no explanation):
+Return ONLY the refined query as a single line, no explanation.
 
-REFINED QUERY:"""
+Refined query:
+"""
+
+
+# ========== CLASSIFIER PROMPT ==========
+# Used by: classifier_node
+# Purpose: Classify query intent for intelligent routing
+
+CLASSIFIER_PROMPT = """
+Classify this lease-related question into one of three categories.
+
+**Categories:**
+
+1. **"lease_only"** - Questions asking ONLY about the specific lease document
+   These questions are about what the lease says, not what the law requires.
+
+   Examples:
+   - "What is my monthly rent?"
+   - "Can I have a pet in my apartment?"
+   - "When is my rent due each month?"
+   - "What utilities are included in my lease?"
+   - "How much notice do I need to give to move out?"
+   - "What is my landlord's phone number?"
+
+2. **"law_only"** - Questions asking ONLY about state or federal law
+   These questions are about legal requirements, not the specific lease.
+
+   Examples:
+   - "What does California law say about security deposits?"
+   - "Are late fees legal in California?"
+   - "What is the maximum security deposit allowed by law?"
+   - "Does California require landlords to provide air conditioning?"
+   - "What are tenant rights under federal Fair Housing Act?"
+   - "What notice is required by law before eviction?"
+
+3. **"both"** - Questions requiring comparison of lease terms vs. legal requirements
+   These questions ask if something in the lease is legal/allowed.
+
+   Examples:
+   - "Is my $300 late fee legal?"
+   - "Can my landlord charge me for carpet cleaning?"
+   - "Is the 2-month security deposit in my lease allowed?"
+   - "Can my landlord enter without 24 hours notice like my lease says?"
+   - "Does my lease violate tenant protection laws?"
+   - "Are the pet fees in my lease legal?"
+
+**User question:**
+{query}
+
+**Instructions:**
+- Read the question carefully
+- Look for keywords:
+  - "lease" / "my lease says" / "according to my lease" -> likely lease_only or both
+  - "law" / "legal" / "allowed" / "California says" -> likely law_only or both
+  - "is X legal" / "can landlord do X" -> likely both
+- If the question compares lease vs. law, choose "both"
+- If unsure, default to "both" (safer to search everything)
+
+**Return JSON only, no other text:**
+{{
+    "category": "<lease_only|law_only|both>",
+    "reasoning": "<brief 1-sentence explanation of why you chose this category>"
+}}
+
+**Your classification (JSON only):**
+"""
+
+
+# ========== SYNTHESIS PROMPTS (SCOPE-AWARE) ==========
+# Used by: synthesis_agent_node
+# Purpose: Different synthesis strategies based on query scope
+
+SYNTHESIS_LEASE_ONLY_PROMPT = """
+You are answering a question about what a specific lease document says.
+
+**User question:** {user_query}
+
+**What the lease says:**
+{lease_finding}
+
+**Your task:** Create a clear, direct answer based ONLY on the lease document.
+
+**Answer structure:**
+
+1. **DIRECT ANSWER** (1-2 sentences)
+   - Answer the question directly
+   - Be specific about terms, amounts, dates
+
+2. **LEASE DETAILS** (2-3 sentences)
+   - Quote relevant clauses from the lease
+   - Note section numbers if present
+   - Explain any conditions or exceptions
+
+3. **[WARNING] IMPORTANT NOTES** (if applicable)
+   - Highlight unusual or strict terms
+   - Note if lease is silent on this topic
+   - Mention any ambiguous language
+
+**Tone:**
+- Be clear and direct
+- Use plain English
+- Don't speculate about what's not written
+- If the lease doesn't address it, say so clearly
+
+**Your answer:**
+"""
+
+
+SYNTHESIS_LAW_ONLY_PROMPT = """
+You are explaining what state or federal law requires regarding tenant rights.
+
+**User question:** {user_query}
+
+**What {state} law requires:**
+{law_finding}
+
+**Your task:** Create a clear explanation of the legal requirements.
+
+**Answer structure:**
+
+1. **DIRECT ANSWER** (1-2 sentences)
+   - Answer the question directly
+   - State the legal requirement clearly
+
+2. **LEGAL REQUIREMENTS** (3-4 sentences)
+   - Cite specific code sections (e.g., "CA Civil Code §1950.5")
+   - Explain what the law requires or prohibits
+   - Note any exceptions or conditions
+   - Distinguish state vs. federal law if both apply
+
+3. **PRACTICAL IMPLICATIONS** (2-3 sentences)
+   - What does this mean for tenants?
+   - What rights do tenants have?
+   - What can't landlords do?
+
+4. **[WARNING] ENFORCEMENT** (1-2 sentences)
+   - How are these rights enforced?
+   - What recourse do tenants have?
+
+**Tone:**
+- Be informative and educational
+- Use plain English, not legalese
+- Be specific about legal standards
+- Always caveat: "This is information, not legal advice."
+
+**Your answer:**
+"""
+
+
+SYNTHESIS_COMPARISON_PROMPT = """
+You are analyzing whether a lease complies with state/federal tenant protection laws.
+
+**User question:** {user_query}
+
+**What the lease says:**
+{lease_finding}
+
+**What {state} law requires:**
+{law_finding}
+
+**Your task:** Compare the lease vs. law and identify any conflicts or compliance issues.
+
+**Answer structure:**
+
+1. **DIRECT ANSWER** (1-2 sentences)
+   - Bottom line: Is the lease term legal/allowed?
+   - Be clear and direct
+
+2. **LEASE TERMS** (2-3 sentences)
+   - What does the lease specifically say?
+   - Quote relevant clauses
+
+3. **LEGAL REQUIREMENTS** (2-3 sentences)
+   - What does state/federal law require?
+   - Cite specific code sections
+
+4. **COMPLIANCE ANALYSIS** (3-4 sentences)
+   - Does the lease comply with the law?
+   - Are there any conflicts or violations?
+   - Which takes precedence (law > lease for tenant protections)
+   - Explain implications for the tenant
+
+5. **[ALERT] RED FLAGS** (if applicable)
+   - Highlight any illegal or unenforceable lease terms
+   - Note violations of tenant rights
+   - Explain what this means practically
+
+6. **RECOMMENDATION** (1-2 sentences)
+   - What should the tenant do?
+   - When to seek legal help
+
+**Tone:**
+- Be balanced and factual
+- Don't be alarmist, but don't downplay violations
+- Use plain English
+- Be specific with numbers and citations
+- Always caveat: "This is information, not legal advice. Consult a lawyer for legal advice."
+
+**Your answer:**
+"""
+
+
+# For easy imports
+__all__ = [
+    "LEASE_ANALYZER_PROMPT",
+    "LAW_ANALYZER_PROMPT",
+    "RETRIEVAL_GRADER_PROMPT",
+    "SYNTHESIS_PROMPT",
+    "QUERY_REFINEMENT_PROMPT",
+    "CLASSIFIER_PROMPT",
+    "SYNTHESIS_LEASE_ONLY_PROMPT",
+    "SYNTHESIS_LAW_ONLY_PROMPT",
+    "SYNTHESIS_COMPARISON_PROMPT"
+]

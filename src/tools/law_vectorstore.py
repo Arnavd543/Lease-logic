@@ -86,7 +86,7 @@ def build_law_vectorstore(state: str = "california") -> None:
         collection_name=f"{state}_laws"
     )
     
-    print(f"\n✅ Law vector store complete!")
+    print(f"\n[OK] Law vector store complete!")
     print(f"   Collection name: {state}_laws")
     print(f"   Total sections embedded: {len(chunks)}")
     
@@ -111,7 +111,7 @@ def build_all_states() -> None:
             build_law_vectorstore(state)
             success_count += 1
         except Exception as e:
-            print(f"\n❌ Error building {state}: {e}")
+            print(f"\n[ERROR] Error building {state}: {e}")
             failed_states.append(state)
     
     # Summary
@@ -123,7 +123,7 @@ def build_all_states() -> None:
     if failed_states:
         print(f"Failed: {', '.join(failed_states)}")
     else:
-        print("All states built successfully! ✅")
+        print("All states built successfully! [OK]")
     
     print("\n" + "="*60)
     print("USAGE INSTRUCTIONS")
@@ -178,14 +178,14 @@ def test_law_search(state: str = "california"):
                 
                 # Check if category matches
                 if top_result['metadata']['category'] == expected_category:
-                    print(f"  ✓ Correct category!")
+                    print(f"  [✓] Correct category!")
                 else:
-                    print(f"  ⚠️  Expected '{expected_category}', got '{top_result['metadata']['category']}'")
+                    print(f"  [WARNING]  Expected '{expected_category}', got '{top_result['metadata']['category']}'")
             else:
-                print("  ❌ No results found")
+                print("  [ERROR] No results found")
                 
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f"  [ERROR] Error: {e}")
 
 def compare_states(query: str, states: List[str] = None):
     """

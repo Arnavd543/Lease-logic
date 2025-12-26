@@ -10,7 +10,7 @@ try:
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
-    print("⚠️  OCR not available. Install: pip install pytesseract pdf2image Pillow")
+    print("[WARNING]  OCR not available. Install: pip install pytesseract pdf2image Pillow")
 
 class LeaseDocumentProcessor:
     """Processes lease PDF documents into structured chunks"""
@@ -58,7 +58,7 @@ class LeaseDocumentProcessor:
         
         # If very little text extracted (scanned PDF), use OCR
         if text_density < 50 or use_ocr:  # Less than 50 chars per page
-            print(f"⚠️  Low text density ({text_density:.0f} chars/page) - using OCR...")
+            print(f"[WARNING]  Low text density ({text_density:.0f} chars/page) - using OCR...")
             
             if not OCR_AVAILABLE:
                 raise ImportError(
@@ -80,7 +80,7 @@ class LeaseDocumentProcessor:
         Returns:
             OCR-extracted text
         """
-        print("🔍 Running OCR on PDF (this may take a minute)...")
+        print("[Classifier] Running OCR on PDF (this may take a minute)...")
         
         # Convert PDF to images
         images = convert_from_path(pdf_path, dpi=300)  # Higher DPI = better OCR
@@ -98,7 +98,7 @@ class LeaseDocumentProcessor:
             text += f"\n--- PAGE {page_num} ---\n"
             text += page_text + "\n"
         
-        print(f"✓ OCR complete! Extracted {len(text)} characters")
+        print(f"[✓] OCR complete! Extracted {len(text)} characters")
         return text
     
     def _preprocess_image_for_ocr(self, image):
