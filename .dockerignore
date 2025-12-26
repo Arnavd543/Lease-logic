@@ -1,0 +1,38 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+*.egg
+venv/
+env/
+
+# Environment
+.env
+.env.local
+
+# Documentation
+*.md
+docs/
+
+# Tests
+tests/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+temp_lease.pdf
+*.tmp
